@@ -27,14 +27,14 @@ export default defineConfig({
       },
     },
   },
-  plugins: [
-    viteStaticCopy({
-      targets: [
-        {
-          src: resolve(__dirname, "src/json/*.json"),
-          dest: "json",
-        },
-      ],
-    }),
-  ],
+  // plugins: [
+  //   viteStaticCopy({
+  //     targets: [
+  //       {
+  //         src: resolve(__dirname, "src/json/*.json"),
+  //         dest: "json",
+  //       },
+  //     ],
+  //   }),
+  // ],
 });
