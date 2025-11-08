@@ -8,15 +8,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   const listElement = document.querySelector(".product-list");
 
   if (!listElement) {
-    console.error("product-list element not found.");
+    console.error("product-list element not found."); // eslint-disable-line no-console
     return;
   }
 
   const productList = new ProductList("tents", dataSource, listElement);
   await productList.init();
 });
-
-
 
 function updateCartCount() {
   const cartItems = getLocalStorage("so-cart") || [];
@@ -31,4 +29,3 @@ updateCartCount();
 
 // Optional: update in real-time if you add to cart
 window.addEventListener("storage", updateCartCount);
-
