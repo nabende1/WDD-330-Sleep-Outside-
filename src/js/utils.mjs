@@ -29,3 +29,13 @@ export function getParam(name) {
   return urlParams.get(name);
 }
 
+// Render an array of items using a template function into parentElement.
+// templateFn(item) -> string (HTML); position defaults to "afterbegin"; clear optionally empties parentElement
+export function renderListWithTemplate(templateFn, parentElement, list, position = "afterbegin", clear = false) {
+  if (!parentElement) return;
+  if (clear) parentElement.innerHTML = "";
+  const htmlStrings = list.map(item => templateFn(item));
+  parentElement.insertAdjacentHTML(position, htmlStrings.join(""));
+}
+
+
