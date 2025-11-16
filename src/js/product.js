@@ -1,19 +1,27 @@
-import { getParam } from "./utils.mjs";
+// src/js/product.js
 import ProductData from "./ProductData.mjs";
 import ProductDetails from "./ProductDetails.mjs";
-import { loadHeaderFooter } from "./utils.mjs";
-loadHeaderFooter();
+import { getParam, loadHeaderFooter } from "./utils.mjs";
+import { updateCartCount } from "./cartUtils.mjs";
+import Alert from "./Alert.js";
 
+document.addEventListener("DOMContentLoaded", async () => {
+  await loadHeaderFooter();
+  updateCartCount();
 
-document.addEventListener("DOMContentLoaded", () => {
+  const alertModule = new Alert("../json/alerts.json");
+  await alertModule.init();
+
   const productId = getParam("product");
   if (!productId) {
-    // eslint-disable-next-line no-console
-    console.error("No product id in query string.");
+    // eslint-disable-next-line
+    console.error("❌ No product ID in URL");
     return;
   }
 
-  const dataSource = new ProductData("tents");
-  const productPage = new ProductDetails(productId, dataSource);
-  productPage.init();
+  const dataSource = new ProductData();
+  const productDetails = new ProductDetails(productId, dataSource);
+  await productDetails.init();
+
+  window.addEventListener("storage", updateCartCount);
 });

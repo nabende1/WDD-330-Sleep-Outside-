@@ -17,13 +17,16 @@ export default class Alert {
       if (!alerts || alerts.length === 0) return;
 
       const dismissed = getLocalStorage(this.dismissedKey) || [];
-      const activeAlerts = alerts.filter(alert => !dismissed.includes(alert.message));
+      const activeAlerts = alerts.filter(
+        (alert) => !dismissed.includes(alert.message),
+      );
 
       if (activeAlerts.length === 0) return;
 
       this.renderAlerts(activeAlerts);
       if (activeAlerts.length > 1) this.startLoop();
     } catch (err) {
+      // eslint-disable-next-line
       console.error("Error loading alerts:", err);
     }
   }
@@ -64,7 +67,9 @@ export default class Alert {
       btn.style.fontSize = "16px";
       btn.style.cursor = "pointer";
 
-      btn.addEventListener("click", () => this.dismissAlert(alert.message, p, section));
+      btn.addEventListener("click", () =>
+        this.dismissAlert(alert.message, p, section),
+      );
 
       p.appendChild(btn);
       section.appendChild(p);
@@ -100,7 +105,7 @@ export default class Alert {
     setLocalStorage(this.dismissedKey, dismissed);
 
     // Remove from alertElements array
-    this.alertElements = this.alertElements.filter(el => el !== element);
+    this.alertElements = this.alertElements.filter((el) => el !== element);
 
     // Reset loop if necessary
     if (this.alertElements.length === 0) {
