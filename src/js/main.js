@@ -1,34 +1,28 @@
-// src/js/main.js
 import ProductData from "./ProductData.mjs";
 import ProductList from "./ProductList.mjs";
-import { getLocalStorage } from "./utils.mjs";
+import { updateCartCount } from "./cartUtils.mjs";
+import Alert from "./Alert.js";
+import { loadHeaderFooter } from "./utils.mjs";
 
 document.addEventListener("DOMContentLoaded", async () => {
-  const dataSource = new ProductData("tents");
+  // Load header/footer first
+  await loadHeaderFooter();
+
+  // Update cart badge after header/footer are injected
+  updateCartCount();
+
+  // Initialize alerts
+  const alertModule = new Alert("./json/alerts.json");
+  await alertModule.init();
+
+  // Load product list on home page if element exists
   const listElement = document.querySelector(".product-list");
-
-  if (!listElement) {
-    console.error("product-list element not found.");
-    return;
+  if (listElement) {
+    const dataSource = new ProductData("tents");
+    const productList = new ProductList("tents", dataSource, listElement);
+    await productList.init();
   }
-
-  const productList = new ProductList("tents", dataSource, listElement);
-  await productList.init();
 });
 
-
-
-function updateCartCount() {
-  const cartItems = getLocalStorage("so-cart") || [];
-  const cartCount = document.querySelector(".cart-count");
-  if (cartCount) {
-    cartCount.textContent = cartItems.length;
-  }
-}
-
-// Run immediately on page load
-updateCartCount();
-
-// Optional: update in real-time if you add to cart
+// Live update when localStorage changes (from other tabs/pages)
 window.addEventListener("storage", updateCartCount);
-
