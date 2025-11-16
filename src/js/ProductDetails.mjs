@@ -1,21 +1,24 @@
-import { getLocalStorage, setLocalStorage } from "./utils.mjs";
-import ProductData from "./ProductData.mjs";
+// src/js/ProductDetails.mjs
+import { getLocalStorage, setLocalStorage, loadHeaderFooter } from "./utils.mjs";
 import { updateCartCount } from "./cartUtils.mjs";
-import { loadHeaderFooter } from "./utils.mjs";
+import { getDiscountInfo } from "./discountUtils.mjs";
 
 export default class ProductDetails {
-  constructor(productId, dataSource) {
+  constructor(productId, dataSource, category) {
     this.productId = productId;
     this.dataSource = dataSource;
+    this.category = category;
     this.product = null;
   }
 
   async init() {
-    // Load header/footer FIRST (this fixes 0-count badge)
     await loadHeaderFooter();
 
     try {
-      this.product = await this.dataSource.findProductById(this.productId);
+      this.product = await this.dataSource.findProductById(
+        this.productId,
+        this.category
+      );
     } catch (err) {
       console.error("Error loading product data:", err);
       this.showNotFound();
@@ -28,14 +31,10 @@ export default class ProductDetails {
     }
 
     this.renderProductDetails();
-
-    // Update cart icon after header loaded
     updateCartCount();
 
     const btn = document.getElementById("addToCart");
-    if (btn) {
-      btn.addEventListener("click", this.addProductToCart.bind(this));
-    }
+    if (btn) btn.addEventListener("click", this.addProductToCart.bind(this));
   }
 
   showNotFound() {
@@ -47,44 +46,84 @@ export default class ProductDetails {
     const container = document.getElementById("product-detail");
     if (!container) return;
 
-    const isDiscounted =
-      this.product.FinalPrice < this.product.SuggestedRetailPrice;
+    const {
+      isDiscounted,
+      finalPrice,
+      suggested,
+      discountAmount,
+      discountPercent
+    } = getDiscountInfo(this.product);
 
-    const discountAmount = (
-      this.product.SuggestedRetailPrice - this.product.FinalPrice
-    ).toFixed(2);
+    // Base fallback image
+    const fallback = "../images/camping-products.jpg";
 
-    const discountPercent = Math.round(
-      ((this.product.SuggestedRetailPrice - this.product.FinalPrice) /
-        this.product.SuggestedRetailPrice) *
-        100
-    );
+    // Responsive images
+    const imgSmall = this.product.Images?.PrimarySmall || fallback;
+    const imgMedium = this.product.Images?.PrimaryMedium || imgSmall;
+    const imgLarge = this.product.Images?.PrimaryLarge || imgMedium;
+
+    const brandName = this.product.Brand?.Name || "Brand Name";
+    const productName =
+      this.product.Name ||
+      this.product.NameWithoutBrand ||
+      "Product";
+
+    const description =
+      this.product.DescriptionHtmlSimple || "No description available.";
+
+    const color = this.product.Colors?.[0]?.ColorName || "Color";
 
     container.innerHTML = `
-      <h3 class="card__brand">${this.product.Brand?.Name || ""}</h3>
-      <h2 class="card__name">${this.product.Name}</h2>
+      <h3 class="card__brand">${brandName}</h3>
+      <h2 class="card__name">${productName}</h2>
 
       <div class="product-image-wrapper">
-        <img id="productImage" src="${this.product.Image}" alt="${this.product.Name}" class="divider" />
-        ${isDiscounted ? `<span class="discount-badge">-${discountPercent}%</span>` : ""}
+        <img 
+          id="productImage"
+          class="divider product-image"
+          src="${imgMedium}"
+          alt="${productName}"
+          loading="lazy"
+
+          srcset="
+            ${imgSmall} 400w,
+            ${imgMedium} 800w,
+            ${imgLarge} 1200w
+          "
+
+          sizes="
+            (max-width: 600px) 90vw,
+            (max-width: 1024px) 60vw,
+            500px
+          "
+        />
+
+        ${
+          isDiscounted
+            ? `<span class="discount-badge">-${discountPercent}%</span>`
+            : ""
+        }
       </div>
 
       <div class="product-card__price-wrapper">
-        <p id="productPrice" class="product-card__price">
-          $${this.product.FinalPrice.toFixed(2)}
-          ${isDiscounted ? `<span class="save-amount">(Save $${discountAmount})</span>` : ""}
+        <p class="product-card__price">
+          $${finalPrice.toFixed(2)}
+          ${
+            isDiscounted
+              ? `<span class="save-amount">(Save $${discountAmount})</span>`
+              : ""
+          }
         </p>
 
-        ${isDiscounted ? `<p class="product-card__oldprice">$${this.product.SuggestedRetailPrice.toFixed(2)}</p>` : ""}
+        ${
+          isDiscounted
+            ? `<p class="product-card__oldprice">$${suggested.toFixed(2)}</p>`
+            : ""
+        }
       </div>
 
-      <p id="productColor" class="product__color">
-        ${this.product.Colors?.[0]?.ColorName || ""}
-      </p>
-
-      <p id="productDesc" class="product__description">
-        ${this.product.DescriptionHtmlSimple}
-      </p>
+      <p id="productColor" class="product__color">${color}</p>
+      <p id="productDesc" class="product__description">${description}</p>
 
       <div class="product-detail__add">
         <button id="addToCart" data-id="${this.product.Id}">Add to Cart</button>
@@ -95,65 +134,76 @@ export default class ProductDetails {
   async addProductToCart() {
     if (!this.product) return;
 
-    let cartItems = getLocalStorage("so-cart");
+    let cartItems = getLocalStorage("so-cart") || [];
     if (!Array.isArray(cartItems)) cartItems = [];
 
-    const existing = cartItems.find((item) => item.Id === this.product.Id);
+    const existing = cartItems.find(item => item.Id === this.product.Id);
     let quantityAdded = 1;
 
     if (existing) {
-      const confirmAdd = await this.confirmAddToCart(this.product.Name);
-      if (!confirmAdd) return; // user canceled
+      const confirmAdd = await this.confirmAddToCart(
+        this.product.Name || "this product"
+      );
+      if (!confirmAdd) return;
       existing.Qty = (existing.Qty || 1) + 1;
       quantityAdded = existing.Qty;
     } else {
       cartItems.push({
         Id: this.product.Id,
-        Name: this.product.Name,
-        Image: this.product.Image,
-        FinalPrice: this.product.FinalPrice,
-        Qty: 1, // matches cart.js
+        Name: this.product.Name || this.product.NameWithoutBrand,
+        Image: this.product.Images?.PrimaryMedium || "",
+        FinalPrice: this.product.FinalPrice || 0,
+        Qty: 1
       });
     }
 
     setLocalStorage("so-cart", cartItems);
     updateCartCount();
+    const totalItems = cartItems.reduce(
+      (sum, item) => sum + (item.Qty || 0),
+      0
+    );
 
-    const totalItems = cartItems.reduce((sum, item) => sum + (item.Qty || 0), 0);
     this.showAddedToCartNotification(
       `${quantityAdded} x ${this.product.Name} added. Total items in cart: ${totalItems}`
     );
   }
 
-  // ✅ Custom confirm modal for adding another product
   confirmAddToCart(productName) {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       const overlay = document.createElement("div");
       overlay.className = "custom-confirm-overlay";
-      overlay.style.position = "fixed";
-      overlay.style.top = "0";
-      overlay.style.left = "0";
-      overlay.style.width = "100%";
-      overlay.style.height = "100%";
-      overlay.style.background = "rgba(0,0,0,0.5)";
-      overlay.style.display = "flex";
-      overlay.style.alignItems = "center";
-      overlay.style.justifyContent = "center";
-      overlay.style.zIndex = "10000";
+      Object.assign(overlay.style, {
+        position: "fixed",
+        top: "0",
+        left: "0",
+        width: "100%",
+        height: "100%",
+        background: "rgba(0,0,0,0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: "10000"
+      });
 
       const modal = document.createElement("div");
       modal.className = "custom-confirm-modal";
-      modal.style.background = "#fff";
-      modal.style.borderRadius = "8px";
-      modal.style.padding = "2rem";
-      modal.style.width = "320px";
-      modal.style.maxWidth = "90%";
-      modal.style.textAlign = "center";
-      modal.style.boxShadow = "0 4px 12px rgba(0,0,0,0.3)";
+      Object.assign(modal.style, {
+        background: "#fff",
+        borderRadius: "8px",
+        padding: "2rem",
+        width: "320px",
+        maxWidth: "90%",
+        textAlign: "center",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
+      });
 
       modal.innerHTML = `
         <h3 style="margin-bottom: 1rem;">Add Another?</h3>
-        <p style="margin-bottom: 1.5rem;">You already have <strong>${productName}</strong> in your cart.<br>Do you want to add another one?</p>
+        <p style="margin-bottom: 1.5rem;">
+          You already have <strong>${productName}</strong> in your cart.<br>
+          Add another?
+        </p>
         <div style="display:flex; justify-content:space-around;">
           <button id="confirm-yes" style="padding:0.5rem 1rem; background:#131d2e; color:#fff; border:none; border-radius:4px; cursor:pointer;">Yes</button>
           <button id="confirm-no" style="padding:0.5rem 1rem; background:#ddd; color:#333; border:none; border-radius:4px; cursor:pointer;">Cancel</button>
@@ -180,30 +230,33 @@ export default class ProductDetails {
     if (!container) {
       container = document.createElement("div");
       container.className = "cart-notification-container";
-      container.style.position = "fixed";
-      container.style.top = "1rem";
-      container.style.right = "1rem";
-      container.style.zIndex = "9999";
-      container.style.display = "flex";
-      container.style.flexDirection = "column";
-      container.style.gap = "0.5rem";
+      Object.assign(container.style, {
+        position: "fixed",
+        top: "1rem",
+        right: "1rem",
+        zIndex: "9999",
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.5rem"
+      });
       document.body.appendChild(container);
     }
 
     const notification = document.createElement("div");
     notification.className = "cart-notification";
-    notification.style.background = "#131d2e";
-    notification.style.color = "#fff";
-    notification.style.padding = "0.75rem 1rem";
-    notification.style.borderRadius = "0.5rem";
-    notification.style.boxShadow = "0 2px 6px rgba(0,0,0,0.3)";
-    notification.style.opacity = "0";
-    notification.style.transform = "translateX(100%)";
-    notification.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+    Object.assign(notification.style, {
+      background: "#131d2e",
+      color: "#fff",
+      padding: "0.75rem 1rem",
+      borderRadius: "0.5rem",
+      boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+      opacity: "0",
+      transform: "translateX(100%)",
+      transition: "transform 0.3s ease, opacity 0.3s ease"
+    });
     notification.innerHTML = `<span class="checkmark">&#10003;</span> ${message}`;
 
     container.appendChild(notification);
-
     requestAnimationFrame(() => {
       notification.style.transform = "translateX(0)";
       notification.style.opacity = "1";
@@ -212,7 +265,9 @@ export default class ProductDetails {
     setTimeout(() => {
       notification.style.transform = "translateX(100%)";
       notification.style.opacity = "0";
-      notification.addEventListener("transitionend", () => notification.remove(), { once: true });
+      notification.addEventListener("transitionend", () => notification.remove(), {
+        once: true
+      });
     }, 2500);
   }
 }

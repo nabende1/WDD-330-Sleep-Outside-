@@ -1,224 +1,252 @@
 // src/js/cart.js
-import { getLocalStorage, setLocalStorage, loadHeaderFooter } from "./utils.mjs";
-import { updateCartCount } from "./cartUtils.mjs";
 
-// ======================================================================
-// Load Header & Footer
-// ======================================================================
+import {
+  getLocalStorage,
+  setLocalStorage,
+  loadHeaderFooter,
+  updateCartCount,
+} from "./utils.mjs";
+
+// ---------------------------------------------------------
+// Initialize Page
+// ---------------------------------------------------------
 document.addEventListener("DOMContentLoaded", async () => {
   await loadHeaderFooter();
-  renderCartContents();
+  renderCart();
 });
 
-// ======================================================================
-// Render Cart Contents
-// ======================================================================
-export function renderCartContents() {
-  let cartItems = getLocalStorage("so-cart") || [];
-
-  // Combine duplicate items by Id
-  const cartMap = new Map();
-  cartItems.forEach((item) => {
-    if (cartMap.has(item.Id)) {
-      cartMap.get(item.Id).Qty += item.Qty || 1;
-    } else {
-      cartMap.set(item.Id, { ...item, Qty: item.Qty || 1 });
-    }
-  });
-
-  cartItems = Array.from(cartMap.values());
+// ---------------------------------------------------------
+// Core Rendering
+// ---------------------------------------------------------
+function renderCart() {
+  let cartItems = mergeDuplicates(getLocalStorage("so-cart", []));
   setLocalStorage("so-cart", cartItems);
 
-  const productList = document.querySelector(".product-list");
-  const cartTotalElement = document.querySelector(".cart-total");
-  if (!productList) return;
+  const container = document.querySelector("#cart-main .cart-items");
+  const totalEl = document.querySelector("#cart-main .cart-total");
 
-  if (cartItems.length === 0) {
-    productList.innerHTML = "<p>Your cart is empty.</p>";
+  if (!cartItems.length) {
+    container.innerHTML = "<p>Your cart is empty.</p>";
+    totalEl.textContent = "Total: $0.00";
     updateCartCount();
-    if (cartTotalElement) cartTotalElement.textContent = "$0.00";
     return;
   }
 
-  // Render items
-  productList.innerHTML = cartItems.map(cartItemTemplate).join("");
-  updateCartCount();
+  container.innerHTML = cartItems.map(cartItemTemplate).join("");
+
   updateCartTotal(cartItems);
+  updateCartCount();
 
-  // Add button listeners
-  cartItems.forEach((item) => {
-    document.getElementById(`remove-${item.Id}`)?.addEventListener("click", () =>
-      removeItem(item.Id)
-    );
-
-    document.getElementById(`minus-${item.Id}`)?.addEventListener("click", () =>
-      changeQuantity(item.Id, -1)
-    );
-
-    document.getElementById(`plus-${item.Id}`)?.addEventListener("click", () =>
-      changeQuantity(item.Id, 1)
-    );
-
-    const cardLink = document.getElementById(`link-${item.Id}`);
-    if (cardLink) {
-      cardLink.href = `/product_pages/index.html?product=${item.Id}`;
-    }
-  });
+  attachCartEvents(cartItems);
 }
 
-// ======================================================================
-// Item Template
-// ======================================================================
+// ---------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------
+const mergeDuplicates = (items) => {
+  const map = new Map();
+  items.forEach((it) => {
+    const qty = it.Qty || 1;
+    if (!map.has(it.Id)) map.set(it.Id, { ...it, Qty: qty });
+    else map.get(it.Id).Qty += qty;
+  });
+  return [...map.values()];
+};
+
+// ---------------------------------------------------------
+// Template
+// ---------------------------------------------------------
 function cartItemTemplate(item) {
-  const price = Number(item.FinalPrice || item.Price || 0).toFixed(2);
-  const totalItemPrice = (price * item.Qty).toFixed(2);
+  const price = Number(item.FinalPrice || item.Price || 0);
+  const total = (price * item.Qty).toFixed(2);
 
   return `
-    <li class="cart-card divider">
-      <a href="#" id="link-${item.Id}" class="cart-card__image">
+    <li class="cart-card divider" data-id="${item.Id}">
+      <a href="/product_pages/index.html?product=${item.Id}" class="cart-card__image">
         <img src="${item.Image}" alt="${item.Name}" />
       </a>
 
-      <a href="#" id="link-${item.Id}">
+      <a href="/product_pages/index.html?product=${item.Id}">
         <h2 class="card__name">${item.Name}</h2>
       </a>
 
       <p class="cart-card__color">${item.Color || "N/A"}</p>
 
       <div class="cart-card__quantity-wrapper">
-        <button id="minus-${item.Id}" class="qty-btn">-</button>
-        <span class="cart-card__quantity">Qty: ${item.Qty}</span>
-        <button id="plus-${item.Id}" class="qty-btn">+</button>
+        <button class="qty-btn minus">-</button>
+
+        <input 
+          type="number"
+          class="cart-qty-input"
+          value="${item.Qty}"
+          min="1"
+        />
+
+        <button class="qty-btn plus">+</button>
       </div>
 
-      <p class="cart-card__price">Price: $${price}</p>
-      <p class="cart-card__total">Total: $${totalItemPrice}</p>
+      <p class="cart-card__price">Price: $${price.toFixed(2)}</p>
+      <p class="cart-card__total">Total: $${total}</p>
 
-      <button id="remove-${item.Id}" class="cart-card__remove">Remove</button>
+      <button class="cart-card__remove">Remove</button>
     </li>
   `;
 }
 
-// ======================================================================
-// Quantity Updates
-// ======================================================================
-export function changeQuantity(id, delta) {
-  let cartItems = getLocalStorage("so-cart") || [];
+// ---------------------------------------------------------
+// Event Bindings
+// ---------------------------------------------------------
+function attachCartEvents(cartItems) {
+  cartItems.forEach((item) => {
+    const row = document.querySelector(`li[data-id="${item.Id}"]`);
+    if (!row) return;
 
-  cartItems = cartItems.map((item) => {
-    if (item.Id === id) {
-      item.Qty = Math.max(1, (item.Qty || 1) + delta);
-    }
-    return item;
+    const minusBtn = row.querySelector(".minus");
+    const plusBtn = row.querySelector(".plus");
+    const qtyInput = row.querySelector(".cart-qty-input");
+
+    minusBtn?.addEventListener("click", () => changeQty(item.Id, -1));
+    plusBtn?.addEventListener("click", () => changeQty(item.Id, 1));
+
+    // Manual input
+    qtyInput?.addEventListener("change", (e) => {
+      let value = parseInt(e.target.value);
+      if (isNaN(value)) value = 1;
+
+      updateQtyManual(item.Id, value);
+    });
+
+    row
+      .querySelector(".cart-card__remove")
+      ?.addEventListener("click", () => removeItem(item.Id));
   });
-
-  setLocalStorage("so-cart", cartItems);
-  renderCartContents();
 }
 
-// ======================================================================
-// Remove Item (with Professional Modal)
-// ======================================================================
-export function removeItem(id) {
-  showConfirmModal(
-    "Are you sure you want to remove this item from your cart?",
-    () => {
-      let cartItems = getLocalStorage("so-cart") || [];
-      cartItems = cartItems.filter((item) => item.Id !== id);
-      setLocalStorage("so-cart", cartItems);
-      renderCartContents();
-    }
-  );
-}
+// ---------------------------------------------------------
+// Quantity Logic
+// ---------------------------------------------------------
+function changeQty(id, delta) {
+  let items = getLocalStorage("so-cart", []);
+  let item = items.find((it) => it.Id === id);
 
-// ======================================================================
-// Cart Total Price
-// ======================================================================
-function updateCartTotal(cartItems) {
-  const cartTotalElement = document.querySelector(".cart-total");
-  if (!cartTotalElement) return;
+  // If decreasing from qty 1 → ask to remove
+  if (item && item.Qty === 1 && delta === -1) {
+    return removeItem(id);
+  }
 
-  const totalPrice = cartItems.reduce(
-    (sum, item) =>
-      sum + Number(item.FinalPrice || item.Price || 0) * item.Qty,
-    0
+  // Normal update
+  items = items.map((it) =>
+    it.Id === id ? { ...it, Qty: Math.max(1, (it.Qty || 1) + delta) } : it,
   );
 
-  cartTotalElement.textContent = `$${totalPrice.toFixed(2)}`;
+  setLocalStorage("so-cart", items);
+  renderCart();
 }
 
-// ======================================================================
-// Custom Professional Confirm Modal
-// ======================================================================
-function showConfirmModal(message, onConfirm) {
+function updateQtyManual(id, newQty) {
+  let items = getLocalStorage("so-cart", []);
+  //let item = items.find((it) => it.Id === id);
+
+  // If user types 0 or less → confirm removal
+  if (newQty < 1) {
+    return removeItem(id);
+  }
+
+  // Normal update
+  items = items.map((it) => (it.Id === id ? { ...it, Qty: newQty } : it));
+
+  setLocalStorage("so-cart", items);
+  renderCart();
+}
+
+// ---------------------------------------------------------
+// Remove Logic
+// ---------------------------------------------------------
+function removeItem(id) {
+  confirmModal("Remove item from cart?", () => {
+    const items = getLocalStorage("so-cart", []).filter((it) => it.Id !== id);
+    setLocalStorage("so-cart", items);
+    renderCart();
+    showToast("Item removed from cart.");
+  });
+}
+
+// ---------------------------------------------------------
+// Totals
+// ---------------------------------------------------------
+function updateCartTotal(items) {
+  const totalEl = document.querySelector("#cart-main .cart-total");
+  const total = items.reduce(
+    (sum, it) => sum + Number(it.FinalPrice || it.Price || 0) * it.Qty,
+    0,
+  );
+  totalEl.textContent = `Total: $${total.toFixed(2)}`;
+}
+
+// ---------------------------------------------------------
+// Confirmation Modal
+// ---------------------------------------------------------
+function confirmModal(message, onConfirm) {
   const overlay = document.createElement("div");
-  overlay.style.cssText = `
-    position: fixed;
-    top:0; left:0;
-    width:100vw; height:100vh;
-    background: rgba(0,0,0,0.45);
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    z-index:99999;
-    opacity:0;
-    transition:opacity 0.25s ease;
-  `;
+  overlay.className = "modal-overlay";
 
-  const modal = document.createElement("div");
-  modal.style.cssText = `
-    background:#fff;
-    padding:1.5rem;
-    border-radius:10px;
-    width:320px;
-    max-width:90%;
-    text-align:center;
-    box-shadow:0 4px 20px rgba(0,0,0,0.15);
-    transform:scale(0.85);
-    transition:transform 0.25s ease;
-  `;
-
-  modal.innerHTML = `
-    <h3 style="color:#131d2e; margin-bottom:0.75rem;">Confirm Removal</h3>
-    <p style="margin-bottom:1.25rem;">${message}</p>
-
-    <div style="display:flex; gap:0.75rem; justify-content:center;">
-      <button id="modalCancel" style="
-        padding:0.5rem 1rem;
-        background:#ccc;
-        border:none;
-        border-radius:6px;
-        cursor:pointer;
-      ">Cancel</button>
-
-      <button id="modalConfirm" style="
-        padding:0.5rem 1rem;
-        background:#bb4230;
-        color:#fff;
-        border:none;
-        border-radius:6px;
-        cursor:pointer;
-      ">Remove</button>
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>Confirm</h3>
+      <p>${message}</p>
+      <div class="modal-actions">
+        <button class="modal-cancel">Cancel</button>
+        <button class="modal-confirm">OK</button>
+      </div>
     </div>
   `;
 
-  overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
-  requestAnimationFrame(() => {
-    overlay.style.opacity = "1";
-    modal.style.transform = "scale(1)";
-  });
-
-  function close() {
-    overlay.style.opacity = "0";
-    modal.style.transform = "scale(0.85)";
-    setTimeout(() => overlay.remove(), 250);
-  }
-
-  modal.querySelector("#modalCancel").addEventListener("click", close);
-  modal.querySelector("#modalConfirm").addEventListener("click", () => {
-    close();
+  overlay.querySelector(".modal-cancel").onclick = () => overlay.remove();
+  overlay.querySelector(".modal-confirm").onclick = () => {
+    overlay.remove();
     onConfirm();
+  };
+}
+
+// ---------------------------------------------------------
+// Toast Notification
+// ---------------------------------------------------------
+function showToast(message) {
+  const old = document.querySelector(".toast-notification");
+  if (old) old.remove();
+
+  const toast = document.createElement("div");
+  toast.className = "toast-notification";
+
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #bb4230;
+    color: white;
+    padding: 12px 18px;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    font-size: 14px;
+    z-index: 999999;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity .3s ease, transform .3s ease;
+  `;
+
+  toast.textContent = message;
+  document.body.appendChild(toast);
+
+  requestAnimationFrame(() => {
+    toast.style.opacity = "1";
+    toast.style.transform = "translateY(0)";
   });
+
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.transform = "translateY(20px)";
+    setTimeout(() => toast.remove(), 300);
+  }, 1800);
 }

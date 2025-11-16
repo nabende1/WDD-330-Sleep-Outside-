@@ -1,50 +1,50 @@
-// wrapper for querySelector...returns matching element
+// ---------------------------------------------
+// Query Selectors
+// ---------------------------------------------
 export function qs(selector, parent = document) {
   return parent.querySelector(selector);
 }
 
-// retrieve data from localstorage
+// ---------------------------------------------
+// Local Storage
+// ---------------------------------------------
 export function getLocalStorage(key) {
   try {
     return JSON.parse(localStorage.getItem(key));
-  } catch (e) {
+  } catch {
     return null;
   }
 }
 
-// save data to local storage
 export function setLocalStorage(key, data) {
   localStorage.setItem(key, JSON.stringify(data));
 }
 
-
-// set a listener for both touchend and click
+// ---------------------------------------------
+// Click Helper (mobile safe)
+// ---------------------------------------------
 export function setClick(selector, callback) {
   const el = qs(selector);
   if (!el) return;
-  el.addEventListener("touchend", (event) => {
-    event.preventDefault();
-    callback(event);
+
+  el.addEventListener("touchend", (e) => {
+    e.preventDefault();
+    callback(e);
   });
+
   el.addEventListener("click", callback);
 }
 
-// get a query parameter value by name, e.g. getParam('product')
+// ---------------------------------------------
+// URL Params
+// ---------------------------------------------
 export function getParam(name) {
-  const queryString = window.location.search;
-  const urlParams = new URLSearchParams(queryString);
-  return urlParams.get(name);
+  return new URLSearchParams(window.location.search).get(name);
 }
 
-/**
- * Render a list using a template function.
- * templateFn: (item) => htmlString
- * parentElement: DOM node where to insert
- * list: array of items
- * position: 'afterbegin'|'beforeend' etc (default: afterbegin)
- * clear: boolean whether to clear the element first (default: false)
- */
-
+// ---------------------------------------------
+// Templating Helpers
+// ---------------------------------------------
 export function renderListWithTemplate(
   templateFn,
   parentElement,
@@ -57,59 +57,93 @@ export function renderListWithTemplate(
 
   if (clear) parentElement.innerHTML = "";
 
-  const htmlStrings = list.map(templateFn);
-  parentElement.insertAdjacentHTML(position, htmlStrings.join(""));
+  const html = list.map(templateFn).join("");
+  parentElement.insertAdjacentHTML(position, html);
 }
 
-// utils.mjs
 export function renderWithTemplate(template, parentElement, data, callback) {
-  parentElement.innerHTML = template; // insert the template
-  if (callback) {
-    callback(data); // run extra logic if provided
-  }
+  if (!parentElement) return;
+
+  parentElement.innerHTML = template;
+
+  if (callback) callback(data);
 }
+
+// ---------------------------------------------
+// Template Loader
+// ---------------------------------------------
 export async function loadTemplate(path) {
   const res = await fetch(path);
   if (!res.ok) throw new Error(`Failed to load template: ${path}`);
-  const template = await res.text();
-  return template;
+  return await res.text();
 }
+
+// ---------------------------------------------
+// HEADER + FOOTER LOADER
+// Works in:
+//   ✓ Vite Dev Server
+//   ✓ GitHub Pages
+//   ✓ Corrects asset paths
+// ---------------------------------------------
 export async function loadHeaderFooter() {
   try {
-    // ALWAYS use root-based absolute paths
-    const headerTemplate = await loadTemplate("/public/partials/header.html");
-    const footerTemplate = await loadTemplate("/public/partials/footer.html");
+    const headerEl = qs("#main-header");
+    const footerEl = qs("#main-footer");
 
-    const headerElement = document.querySelector("#main-header");
-    const footerElement = document.querySelector("#main-footer");
+    if (!headerEl || !footerEl) return;
 
-    renderWithTemplate(headerTemplate, headerElement, null, () => {
-      if (window.updateCartCount) window.updateCartCount();
-    });
+    // Vite auto-resolves public folder as root
+    const base = import.meta.env.BASE_URL;
 
-    renderWithTemplate(footerTemplate, footerElement);
-  } catch (err) {
-    console.error("Error loading header/footer:", err);
+    const headerHTML = await loadTemplate(`${base}partials/header.html`);
+    const footerHTML = await loadTemplate(`${base}partials/footer.html`);
+
+    // Render header
+    renderWithTemplate(headerHTML, headerEl);
+
+    // Ensure cart count updates AFTER header injection
+    setTimeout(() => {
+      if (typeof updateCartCount === "function") updateCartCount();
+    }, 50);
+
+    // Render footer
+    renderWithTemplate(footerHTML, footerEl);
+
+    //---------------------------------------------
+    // Attach Search Form Listener
+    //---------------------------------------------
+    const searchForm = document.querySelector("#product-search-form");
+
+    if (searchForm) {
+      searchForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const query = qs("#search-input")?.value.trim();
+
+        if (!query) return;
+
+        // Navigate to product listing page with search
+        window.location.href = `${base}product_listing/index.html?search=${encodeURIComponent(query)}`;
+      });
+    }
+
+  } catch (error) {
+    console.error("Error loading header/footer:", error);
   }
 }
 
-
-
-/**
- * Update the cart count badge (any document that has a .cart-count element will be updated).
- * Sets textContent to total quantity (sum of item.quantity) if present, otherwise number of items.
- */
+// ---------------------------------------------
+// CART COUNT
+// ---------------------------------------------
 export function updateCartCount() {
-  const raw = getLocalStorage("so-cart") || [];
-  const cartItems = Array.isArray(raw) ? raw : [];
+  const cart = Array.isArray(getLocalStorage("so-cart"))
+    ? getLocalStorage("so-cart")
+    : [];
 
-  // Use total quantity if quantity fields exist, else number of items
-  const totalQty = cartItems.reduce((sum, it) => sum + (it.quantity || 1), 0);
+  const totalQty = cart.reduce((sum, item) => {
+    return sum + (item.Qty || 1);
+  }, 0);
 
-  // update every .cart-count found on the page (header on all pages)
-  const elements = document.querySelectorAll(".cart-count");
-  elements.forEach((el) => {
+  document.querySelectorAll(".cart-count").forEach((el) => {
     el.textContent = totalQty;
   });
 }
-
