@@ -8,7 +8,7 @@
 
     <title>Sleep Outside | Checkout</title>
 
-    <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="../css/style.css" />
   </head>
 
   <body>
@@ -17,8 +17,42 @@
     <main class="divider">
       <section class="products">
         <h2>Review & Place your Order</h2>
+        <main class="checkout-container">
+            <h1>Checkout</h1>
+          
+            <section class="checkout-content">
+              <form id="checkout-form" class="checkout-form">
+                <h2>Customer Information</h2>
+                <label>First Name<input name="fname" id="firstName" required></label>
+                <label>Last Name<input name="lname" id="lastName" required></label>
+                <label>Street Address<input name="street" id="street" required></label>
+                <label>City<input name="city" id="city" required></label>
+                <label>State<input name="state" id="state" required></label>
+                <label>Zip Code<input name="zip" id="zip" required></label>
+          
+                <h2>Payment</h2>
+                <label>Card Number<input name="cardNumber" id="cardNumber" required></label>
+                <label>Expiration<input name="expiration" id="expiration" type="month" required></label>
+                <label>Security Code<input name="code" id="cvv" required></label>
+          
+                <button type="submit" class="checkout-submit">Place Order</button>
+              </form>
+          
+              <aside id="order-summary" class="checkout-summary">
+                <h2>Order Summary</h2>
+                <p>Items: <span id="items">0</span></p>
+                <p>Subtotal: <span id="subtotal">$0.00</span></p>
+                <p>Tax: <span id="tax">$0.00</span></p>
+                <p>Shipping: <span id="shipping">$0.00</span></p>
+                <hr />
+                <h3>Order Total: <span id="order-total">$0.00</span></h3>
+              </aside>
+            </section>
+          </main>
+        <script type="module" src="../js/checkout.mjs"></script>
       </section>
     </main>
+    <!-- Dynamic footer placeholder -->
     <footer id="main-footer"></footer>
   </body>
 </html>
