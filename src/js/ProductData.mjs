@@ -8,7 +8,7 @@ async function convertToJson(res) {
 // REAL API category slugs
 const CATEGORIES = ["tents", "backpacks", "sleepingbags", "hammocks"];
 
-export default class ProductData {
+export default class ExternalServices {
   async getData(category) {
     const res = await fetch(`${baseURL}products/search/${category}`);
     const data = await convertToJson(res);

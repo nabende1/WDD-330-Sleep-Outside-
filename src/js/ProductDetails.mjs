@@ -2,6 +2,8 @@
 import { getLocalStorage, setLocalStorage, loadHeaderFooter } from "./utils.mjs";
 import { updateCartCount } from "./cartUtils.mjs";
 import { getDiscountInfo } from "./discountUtils.mjs";
+import { alertMessage } from "./utils.mjs";
+
 
 export default class ProductDetails {
   constructor(productId, dataSource, category) {
@@ -12,30 +14,37 @@ export default class ProductDetails {
   }
 
   async init() {
-    await loadHeaderFooter();
+  await loadHeaderFooter();
 
-    try {
-      this.product = await this.dataSource.findProductById(
-        this.productId,
-        this.category
-      );
-    } catch (err) {
-      console.error("Error loading product data:", err);
-      this.showNotFound();
-      return;
-    }
+  try {
+    let data = await this.dataSource.findProductById(
+      this.productId,
+      this.category
+    );
 
-    if (!this.product) {
-      this.showNotFound();
-      return;
-    }
+    // unwrap API result
+    this.product = data.Result || data.product || data;
 
-    this.renderProductDetails();
-    updateCartCount();
-
-    const btn = document.getElementById("addToCart");
-    if (btn) btn.addEventListener("click", this.addProductToCart.bind(this));
+  } catch (err) {
+    console.error("Error loading product data:", err);
+    this.showNotFound();
+    return;
   }
+
+  if (!this.product) {
+    this.showNotFound();
+    return;
+  }
+
+  // Render details
+  this.renderProductDetails();
+  updateCartCount();
+
+  // Attach add-to-cart handler
+  const btn = document.getElementById("addToCart");
+  if (btn) btn.addEventListener("click", this.addProductToCart.bind(this));
+}
+
 
   showNotFound() {
     const container = document.getElementById("product-detail");
@@ -84,13 +93,11 @@ export default class ProductDetails {
           src="${imgMedium}"
           alt="${productName}"
           loading="lazy"
-
           srcset="
             ${imgSmall} 400w,
             ${imgMedium} 800w,
             ${imgLarge} 1200w
           "
-
           sizes="
             (max-width: 600px) 90vw,
             (max-width: 1024px) 60vw,
@@ -114,7 +121,6 @@ export default class ProductDetails {
               : ""
           }
         </p>
-
         ${
           isDiscounted
             ? `<p class="product-card__oldprice">$${suggested.toFixed(2)}</p>`
@@ -169,6 +175,7 @@ export default class ProductDetails {
     );
   }
 
+  /* -------------- Confirmation Modal + Notification -------------- */
   confirmAddToCart(productName) {
     return new Promise(resolve => {
       const overlay = document.createElement("div");

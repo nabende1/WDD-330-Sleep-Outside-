@@ -147,3 +147,73 @@ export function updateCartCount() {
     el.textContent = totalQty;
   });
 }
+
+// -----------------------------------------------------
+// Custom Alert Message Utility
+// -----------------------------------------------------
+export function alertMessage(message, scroll = true) {
+  // ensure message is readable
+  if (typeof message !== "string") {
+    try {
+      message = JSON.stringify(message);
+    } catch {
+      message = "An unexpected error occurred.";
+    }
+  }
+
+  const alert = document.createElement('div');
+  alert.classList.add('alert');
+
+  // Insert message + close button
+  alert.innerHTML = `
+    <p>${message}</p>
+    <span class="alert-close">✖</span>
+  `;
+
+  alert.addEventListener('click', function (e) {
+    if (e.target.classList.contains("alert-close")) {
+      alert.remove();
+    }
+  });
+
+  const main = document.querySelector('main');
+  main.prepend(alert);
+
+  if (scroll) window.scrollTo(0, 0);
+}
+
+
+export function formatError(err) {
+  if (!err) return "An unknown error occurred.";
+
+  // If backend returned a plain string
+  if (typeof err === "string") {
+    return err;
+  }
+
+  // If backend sent { message: "something" }
+  if (typeof err.message === "string") {
+    return err.message;
+  }
+
+  // If backend returns an object with field errors
+  if (typeof err === "object") {
+    const msgs = [];
+
+    for (const key in err) {
+      const val = err[key];
+      if (typeof val === "string") msgs.push(val);
+    }
+
+    if (msgs.length > 0) {
+      return msgs.join("\n• ");
+    }
+  }
+
+  // Last fallback
+  return "Something went wrong. Please try again.";
+}
+
+
+
+
